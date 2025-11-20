@@ -2,7 +2,6 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: Arial, sans-serif;
 }
 
 body {
@@ -33,12 +32,6 @@ main {
   flex-wrap: wrap;
   gap: 30px;
   justify-content: center;
-}
-
-@media (min-width: 768px) {
-  main {
-    grid-template-columns: 2fr 1fr;
-  }
 }
 
 section {
@@ -163,8 +156,13 @@ button {
   transition: background-color 0.2s;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background-color: #3949ab;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .message {

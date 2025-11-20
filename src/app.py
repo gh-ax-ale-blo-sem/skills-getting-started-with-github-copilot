@@ -8,16 +8,31 @@ for extracurricular activities at Mergington High School.
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-import os
 from pathlib import Path
+from pydantic import BaseModel, EmailStr, field_validator
+from typing import List
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
 # Mount the static files directory
-current_dir = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
-          "static")), name="static")
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+class Activity(BaseModel):
+    """Activity data model"""
+    description: str
+    schedule: str
+    max_participants: int
+    participants: List[str]
+    
+    @field_validator('max_participants')
+    @classmethod
+    def validate_max_participants(cls, v):
+        if v <= 0:
+            raise ValueError('max_participants must be positive')
+        return v
 
 # In-memory activity database
 activities = {
@@ -78,25 +93,48 @@ activities = {
 }
 
 
+def _get_activity(activity_name: str) -> dict:
+    """Helper function to get activity and validate it exists"""
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return activities[activity_name]
+
+
+def _validate_email(email: str) -> str:
+    """Validate email format"""
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Normalize email to lowercase
+    email = email.lower().strip()
+    
+    # Basic email validation - could be enhanced with regex
+    if not email.endswith("@mergington.edu"):
+        raise HTTPException(status_code=400, detail="Only @mergington.edu emails are allowed")
+    return email
+
+
 @app.get("/")
 def root():
+    """Redirect root to static index page"""
     return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/activities")
 def get_activities():
+    """Get all available activities"""
     return activities
 
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
-    # Validate activity exists
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
+    activity = _get_activity(activity_name)
+    email = _validate_email(email)
 
-    # Get the specific activity
-    activity = activities[activity_name]
+    # Check if activity is full
+    if len(activity["participants"]) >= activity["max_participants"]:
+        raise HTTPException(status_code=400, detail="Activity is full")
 
     # Validate student is not already signed up
     if email in activity["participants"]:
@@ -110,12 +148,8 @@ def signup_for_activity(activity_name: str, email: str):
 @app.delete("/activities/{activity_name}/unregister")
 def unregister_from_activity(activity_name: str, email: str):
     """Unregister a student from an activity"""
-    # Validate activity exists
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
-
-    # Get the specific activity
-    activity = activities[activity_name]
+    activity = _get_activity(activity_name)
+    email = _validate_email(email)
 
     # Validate student is signed up
     if email not in activity["participants"]:

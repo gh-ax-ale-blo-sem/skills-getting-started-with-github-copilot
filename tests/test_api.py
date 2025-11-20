@@ -172,6 +172,39 @@ class TestSignupForActivity:
         activities_response = client.get("/activities")
         activities_data = activities_response.json()
         assert "artist@mergington.edu" in activities_data["Art Studio"]["participants"]
+    
+    def test_signup_invalid_email(self, client):
+        """Test signing up with invalid email"""
+        response = client.post("/activities/Chess Club/signup?email=invalid-email")
+        assert response.status_code == 400
+        assert "invalid email" in response.json()["detail"].lower()
+    
+    def test_signup_non_mergington_email(self, client):
+        """Test signing up with non-mergington.edu email"""
+        response = client.post("/activities/Chess Club/signup?email=student@otherschool.edu")
+        assert response.status_code == 400
+        assert "mergington.edu" in response.json()["detail"].lower()
+    
+    def test_signup_activity_full(self, client):
+        """Test signing up when activity is full"""
+        # Fill up Chess Club (max 12 participants)
+        for i in range(10):  # Already has 2 participants
+            client.post(f"/activities/Chess Club/signup?email=student{i}@mergington.edu")
+        
+        # Try to add one more (should fail)
+        response = client.post("/activities/Chess Club/signup?email=overflow@mergington.edu")
+        assert response.status_code == 400
+        assert "full" in response.json()["detail"].lower()
+    
+    def test_signup_email_case_normalization(self, client):
+        """Test that emails are normalized to lowercase"""
+        response = client.post("/activities/Chess Club/signup?email=NewStudent@Mergington.EDU")
+        assert response.status_code == 200
+        
+        # Verify email is stored as lowercase
+        activities_response = client.get("/activities")
+        activities_data = activities_response.json()
+        assert "newstudent@mergington.edu" in activities_data["Chess Club"]["participants"]
 
 
 class TestUnregisterFromActivity:
